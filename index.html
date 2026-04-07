@@ -229,6 +229,46 @@
     .btn-secondary:active { background: #e5e7eb; }
     .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+    /* 邮箱输入 */
+    .email-section {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .email-section label {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .email-section input {
+      flex: 1;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 14px;
+      background: #fafafa;
+    }
+    .email-section input:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: white;
+    }
+    .email-save {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
     /* 预览弹窗 */
     .modal-overlay {
       position: fixed; inset: 0;
@@ -321,6 +361,13 @@
     </div>
   </div>
 
+  <!-- 邮箱设置 -->
+  <div class="email-section">
+    <label>📧 发送邮箱</label>
+    <input type="email" id="emailInput" placeholder="接收日报的邮箱地址">
+    <button class="email-save" onclick="saveEmail()">保存</button>
+  </div>
+
   <!-- 一、基本情况 -->
   <div class="section-card">
     <div class="section-title"><span class="num">一</span>基本情况</div>
@@ -373,7 +420,7 @@
 <div class="btn-area">
   <div class="btn-row">
     <button class="btn btn-secondary" onclick="previewReport()">👁️ 预览</button>
-    <button class="btn btn-primary" id="genBtn" onclick="generateReport()">📄 生成日报</button>
+    <button class="btn btn-primary" id="genBtn" onclick="generateReport()">📧 发送邮件</button>
   </div>
 </div>
 
@@ -416,12 +463,13 @@ function initDate() {
 // 获取天气
 async function fetchWeather() {
   try {
-    const resp = await fetch(`https://api.qweather.com/v7/grid-weather/3d?location=${LOC}&key=${API_KEY}`);
+    const resp = await fetch(`https://wttr.in/%E9%81%90%E5%AE%81,%E6%B3%B0%E6%B4%8E%E9%95%87?format=j1&lang=zh`);
     const data = await resp.json();
-    const today = currentDate.replace('-','');
-    const day = data.daily?.find(d => d.fxDate === today);
-    if (day) {
-      weather = `${day.textDay} ${day.tempMin}-${day.tempMax}℃`;
+    const today = data.current_condition?.[0];
+    if (today) {
+      const temp = today.temp_C + '℃';
+      const desc = today.weatherDesc?.[0]?.value || '';
+      weather = `${desc} ${temp}`;
       const badge = document.getElementById('weatherBadge');
       badge.textContent = '🌤️ ' + weather;
       badge.classList.remove('loading');
@@ -442,6 +490,15 @@ function getContent() {
     次日计划: document.getElementById('sec4').value.split('\n').filter(l=>l.trim()),
     协调问题: document.getElementById('sec5').value.trim() || '无'
   };
+}
+
+function dateDisplay(dateStr) {
+  return `${dateStr.slice(0,4)}年${parseInt(dateStr.slice(5,7))}月${parseInt(dateStr.slice(8))}日`;
+}
+
+function weekDay(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return WEEKDAY[d.getDay()];
 }
 
 // 预览
@@ -509,12 +566,27 @@ function delPhoto(i) {
   renderPhotos();
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // 生成日报
 async function generateReport() {
   const btn = document.getElementById('genBtn');
+  const email = document.getElementById('emailInput').value.trim();
+  if (!email || !email.includes('@')) {
+    showToast('❌ 请先填写邮箱地址', 'error');
+    return;
+  }
+
   btn.disabled = true;
-  btn.textContent = '⏳ 生成中...';
-  showToast('正在生成日报...', '');
+  btn.textContent = '⏳ 发送中...';
+  showToast('正在生成并发送日报...', '');
 
   try {
     const c = getContent();
@@ -526,10 +598,11 @@ async function generateReport() {
       photos.push({ name: f.name, data: base64 });
     }
 
-    const resp = await fetch('/api/generate', {
+    const resp = await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        toEmail: email,
         date: currentDate,
         weather: weather,
         content: c,
@@ -537,32 +610,31 @@ async function generateReport() {
       })
     });
 
-    if (!resp.ok) throw new Error('生成失败');
+    const result = await resp.json();
+    if (!resp.ok) throw new Error(result.error || '发送失败');
 
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const dateStr = currentDate.replace(/-/g,'');
-    a.href = url;
-    a.download = `舍得酒业夯土墙施工日报_${dateStr}.docx`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('✅ 生成成功！', 'success');
+    showToast('✅ 已发送到 ' + email, 'success');
   } catch(e) {
-    showToast('❌ 生成失败：' + e.message, 'error');
+    showToast('❌ ' + e.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '📄 生成日报';
+    btn.textContent = '📧 发送邮件';
   }
 }
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+function saveEmail() {
+  const email = document.getElementById('emailInput').value.trim();
+  if (email && email.includes('@')) {
+    localStorage.setItem('sheda_email', email);
+    showToast('✅ 邮箱已保存', 'success');
+  } else {
+    showToast('❌ 请输入正确的邮箱', 'error');
+  }
+}
+
+function loadEmail() {
+  const saved = localStorage.getItem('sheda_email');
+  if (saved) document.getElementById('emailInput').value = saved;
 }
 
 function showToast(msg, type) {
@@ -579,6 +651,7 @@ document.getElementById('previewModal').onclick = function(e) {
 
 // 初始化
 initDate();
+loadEmail();
 </script>
 </body>
 </html>
