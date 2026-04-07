@@ -1,0 +1,16 @@
+{
+  "name": "sheda-daily-report-pwa",
+  "version": "1.0.0",
+  "description": "舍得日报生成PWA",
+  "main": "server_simple.js",
+  "scripts": {
+    "start": "node server_simple.js",
+    "dev": "node server_simple.js"
+  },
+  "dependencies": {
+    "docx": "^9.6.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
