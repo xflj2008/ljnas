@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="theme-color" content="#2f6e4a">
+    <link rel="manifest" href="data:application/manifest+json,{
+        \"name\":\"生产统计助手\",
+        \"short_name\":\"生产统计\",
+        \"start_url\":\".\",
+        \"display\":\"standalone\",
+        \"background_color\":\"#eef2e9\",
+        \"theme_color\":\"#2f6e4a\",
+        \"icons\":[{\"src\":\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%232f6e4a'/%3E%3Ctext x='50' y='68' font-size='50' text-anchor='middle' fill='white'%3E📊%3C/text%3E%3C/svg%3E\",\"sizes\":\"any\",\"type\":\"image/svg+xml\"}]
+    }">
+    <title>生产统计助手 · 进度预测</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(145deg, #e0f0e0 0%, #c8e0d0 100%);
+            font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
+            padding: 20px 16px;
+            color: #1a2e25;
+            min-height: 100vh;
+        }
+        .container { max-width: 1300px; margin: 0 auto; }
+        .card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(2px);
+            border-radius: 40px;
+            box-shadow: 0 20px 35px -12px rgba(0,0,0,0.15);
+            padding: 18px 22px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,210,0.7);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            border-bottom: 3px solid #ffdf9c;
+            padding-bottom: 10px;
+            margin-bottom: 18px;
+        }
+        .card-header h2 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #1f6e43, #4da375, #f4b942);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .badge {
+            background: linear-gradient(110deg, #f9eec1, #fff3d1);
+            padding: 4px 12px;
+            border-radius: 60px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #b45f1b;
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .grid-2col {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #ffffff 0%, #fef9e6 100%);
+            border-radius: 28px;
+            padding: 12px 10px;
+            text-align: center;
+            border: 1px solid #ffe1a0;
+        }
+        .stat-number {
+            font-size: 1.7rem;
+            font-weight: 800;
+            background: linear-gradient(145deg, #216f45, #3f9b64);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .progress-bar-bg {
+            background: #e7eedf;
+            border-radius: 30px;
+            height: 12px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, #2f9e5a, #f4bc42);
+            width: 0%;
+            height: 100%;
+        }
+        .material-item {
+            background: #ffffffdd;
+            border-radius: 24px;
+            padding: 10px 12px;
+            border: 1px solid #ffdfa5;
+        }
+        .material-progress {
+            height: 6px;
+            background: #e0efd6;
+            border-radius: 10px;
+            margin-top: 6px;
+        }
+        .material-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3da066, #f5bc4a);
+            width: 0%;
+            border-radius: 10px;
+        }
+        input, select, button {
+            padding: 6px 14px;
+            border-radius: 44px;
+            border: 1px solid #d9e0cf;
+            background: #fffef7;
+            font-size: 0.85rem;
+        }
+        button {
+            background: linear-gradient(95deg, #317e55, #48ab72);
+            color: white;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #3d9a63;
+            color: #2a6e48;
+        }
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #e0906a;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top:0;left:0;
+            width:100%;height:100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 48px;
+            padding: 24px;
+            width: 280px;
+            text-align: center;
+        }
+        .inline-hint { font-size: 0.65rem; color: #7f8c6e; margin-top: 4px; }
+        canvas { max-height: 80px; width: 100%; }
+        .suggestion-box {
+            background: #fff7e8;
+            border-radius: 28px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+        @media (max-width: 640px) {
+            .card { padding: 14px 16px; }
+            .stat-number { font-size: 1.3rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- 头部项目栏 -->
+    <div class="card" style="padding: 12px 18px;">
+        <div class="flex-row">
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <select id="projectSelect"></select>
+                <button id="newProjectBtn" class="btn-outline">➕ 新建项目</button>
+                <span class="badge" id="projectNameBadge">未选择</span>
+            </div>
+            <button id="editTargetBtn" class="btn-outline">✏️ 目标</button>
+        </div>
+    </div>
+
+    <!-- 进度卡片 -->
+    <div class="card">
+        <div class="grid-2col">
+            <div class="stat-card"><span>🎯 目标方量</span><div class="stat-number" id="targetVolumeDisplay">0</div><div class="inline-hint">(<span id="targetPotsDisplay">0</span>锅)</div></div>
+            <div class="stat-card"><span>✅ 已完成</span><div class="stat-number" id="totalVolumeDone">0</div><div class="inline-hint">(<span id="totalPotsDone">0</span>锅)</div></div>
+            <div class="stat-card"><span>📦 剩余</span><div class="stat-number" id="remainingVolume">0</div><div class="inline-hint">(<span id="remainingPots">0</span>锅)</div></div>
+            <div class="stat-card"><span>📈 进度</span><div class="stat-number" id="percentComplete">0</div><div class="inline-hint">%</div></div>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="chart-container" style="margin-top: 6px;"><canvas id="progressDonut"></canvas></div>
+    </div>
+
+    <!-- 预测建议 -->
+    <div class="card">
+        <div class="card-header"><h2>📊 智能预测</h2><div class="badge">动态计算</div></div>
+        <div class="grid-2col">
+            <div class="stat-card"><span>平均每日产量</span><div class="stat-number" id="avgDailyPots">0</div><div class="inline-hint">锅/天 (<span id="avgDailyVolume">0</span>m³)</div></div>
+            <div class="stat-card"><span>预计剩余天数</span><div class="stat-number" id="estimatedDaysLeft">--</div></div>
+        </div>
+        <div class="suggestion-box">
+            <div class="flex-row"><span>💡 产量建议</span><div><input type="number" id="targetDaysInput" value="30" style="width:70px;"> 天完成 <button id="calcSuggestionBtn" class="btn-outline" style="padding:4px 12px;">计算</button></div></div>
+            <div id="suggestionText" class="inline-hint" style="margin-top:8px;">——</div>
+        </div>
+    </div>
+
+    <!-- 材料总览 -->
+    <div class="card">
+        <div class="card-header"><h2>📦 材料消耗</h2><div class="badge">实时扣减</div></div>
+        <div id="materialGrid" class="grid-2col"><div class="empty-state">暂无项目</div></div>
+    </div>
+
+    <!-- 产量录入 -->
+    <div class="card">
+        <div class="card-header"><h2>✍️ 生产记录</h2><div class="badge">每锅0.3m³</div></div>
+        <div class="flex-row" style="margin-bottom:12px;">
+            <input type="date" id="recordDate" style="flex:1">
+            <select id="inputType"><option value="pot">锅数</option><option value="volume">方量</option></select>
+            <input type="number" id="inputValue" value="0" step="1" style="width:80px" placeholder="数量">
+            <input type="text" id="recordNote" placeholder="备注" style="flex:1">
+            <button id="addRecordBtn">➕ 录入</button>
+        </div>
+        <div style="max-height:240px; overflow:auto;">
+            <table style="width:100%">
+                <thead><tr><th>日期</th><th>锅数</th><th>m³</th><th>备注</th><th></th></tr></thead>
+                <tbody id="recordsTbody"><tr><td colspan="5" class="empty-state">暂无记录</td></tr></tbody>
+            </table>
+        </div>
+        <div class="flex-row" style="margin-top:12px;">
+            <span class="badge">总锅数: <strong id="footerTotalPots">0</strong></span>
+            <button id="resetProjectBtn" class="btn-outline">清空记录</button>
+            <button id="exportCsvBtn" class="btn-outline">导出CSV</button>
+        </div>
+    </div>
+    <div class="inline-hint">🔐 清空/删除项目需密码 admin123</div>
+</div>
+
+<div id="passwordModal" class="modal"><div class="modal-content"><h3>🔐 权限验证</h3><input type="password" id="adminPassword" style="margin:12px 0; width:100%;"><div class="flex-row"><button id="confirmPasswordBtn">确认</button><button id="cancelPasswordBtn" class="btn-outline">取消</button></div></div></div>
+
+<script>
+    const POT_VOLUME = 0.3;
+    const MATERIALS = { pingche:{name:"🏺平车",perPot:240}, bigStone:{name:"🪨大石子",perPot:80}, smallStone:{name:"🪨小石子",perPot:80}, pigment:{name:"🎨颜料",perPot:2.13} };
+    const ADMIN_PWD = "admin123";
+    let projects = {}, currentProjectId = null, pendingAction = null, donutChart = null;
+    // DOM
+    const projectSelect = document.getElementById('projectSelect'), newProjectBtn = document.getElementById('newProjectBtn'), editTargetBtn = document.getElementById('editTargetBtn');
+    const addRecordBtn = document.getElementById('addRecordBtn'), resetProjectBtn = document.getElementById('resetProjectBtn'), exportCsvBtn = document.getElementById('exportCsvBtn');
+    const recordDate = document.getElementById('recordDate'), inputType = document.getElementById('inputType'), inputValue = document.getElementById('inputValue'), recordNote = document.getElementById('recordNote');
+    const targetVolumeDisplay = document.getElementById('targetVolumeDisplay'), targetPotsDisplay = document.getElementById('targetPotsDisplay');
+    const totalVolumeDone = document.getElementById('totalVolumeDone'), totalPotsDone = document.getElementById('totalPotsDone');
+    const remainingVolume = document.getElementById('remainingVolume'), remainingPots = document.getElementById('remainingPots');
+    const percentCompleteSpan = document.getElementById('percentComplete'), progressFill = document.getElementById('progressFill'), footerTotalPots = document.getElementById('footerTotalPots');
+    const materialGrid = document.getElementById('materialGrid'), recordsTbody = document.getElementById('recordsTbody'), projectNameBadge = document.getElementById('projectNameBadge');
+    const avgDailyPotsSpan = document.getElementById('avgDailyPots'), avgDailyVolumeSpan = document.getElementById('avgDailyVolume'), estimatedDaysLeftSpan = document.getElementById('estimatedDaysLeft');
+    const targetDaysInput = document.getElementById('targetDaysInput'), calcSuggestionBtn = document.getElementById('calcSuggestionBtn'), suggestionText = document.getElementById('suggestionText');
+    const modal = document.getElementById('passwordModal'), adminPasswordInput = document.getElementById('adminPassword'), confirmBtn = document.getElementById('confirmPasswordBtn'), cancelBtn = document.getElementById('cancelPasswordBtn');
+
+    function save() { localStorage.setItem('prod_pwa', JSON.stringify({ projects, currentProjectId })); }
+    function load() {
+        const raw = localStorage.getItem('prod_pwa');
+        if(raw) { try { const d=JSON.parse(raw); projects=d.projects||{}; currentProjectId=d.currentProjectId||null; }catch(e){} }
+        if(!projects||!Object.keys(projects).length) projects={};
+        if(currentProjectId && !projects[currentProjectId]) currentProjectId=null;
+        refreshSelect(); render();
+    }
+    function refreshSelect() {
+        projectSelect.innerHTML='';
+        const ids=Object.keys(projects);
+        if(!ids.length) { let opt=document.createElement('option'); opt.text='-- 新建项目 --'; opt.disabled=true; opt.selected=true; projectSelect.appendChild(opt); }
+        else for(let id of ids) { let opt=document.createElement('option'); opt.value=id; opt.text=projects[id].name; if(id===currentProjectId) opt.selected=true; projectSelect.appendChild(opt); }
+        const has=!!currentProjectId;
+        editTargetBtn.disabled=!has; addRecordBtn.disabled=!has; resetProjectBtn.disabled=!has; exportCsvBtn.disabled=!has;
+        recordDate.disabled=!has; inputType.disabled=!has; inputValue.disabled=!has; recordNote.disabled=!has;
+        if(!has) projectNameBadge.innerText='未选择';
+        else projectNameBadge.innerText=projects[currentProjectId].name;
+    }
+    function totalPots(records){ return records.reduce((s,r)=>s+r.pots,0); }
+    function avgDaily(records){
+        if(!records.length) return 0;
+        let days=new Set(records.map(r=>r.date)).size;
+        return days? totalPots(records)/days : 0;
+    }
+    function render() {
+        if(!currentProjectId||!projects[currentProjectId]) {
+            targetVolumeDisplay.innerText='0'; targetPotsDisplay.innerText='0'; totalVolumeDone.innerText='0'; totalPotsDone.innerText='0';
+            remainingVolume.innerText='0'; remainingPots.innerText='0'; percentCompleteSpan.innerText='0'; progressFill.style.width='0%';
+            footerTotalPots.innerText='0'; materialGrid.innerHTML='<div class="empty-state">📭 新建项目</div>'; recordsTbody.innerHTML='<tr><td colspan="5" class="empty-state">暂无记录</td></tr>';
+            avgDailyPotsSpan.innerText='0'; avgDailyVolumeSpan.innerText='0'; estimatedDaysLeftSpan.innerText='--'; suggestionText.innerText='创建项目后开始';
+            if(donutChart) donutChart.destroy();
+            let ctx=document.getElementById('progressDonut').getContext('2d');
+            donutChart=new Chart(ctx,{type:'doughnut',data:{labels:['完成','剩余'],datasets:[{data:[0,100],backgroundColor:['#f4bc42','#dee9d6'],borderWidth:0,cutout:'65%'}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}}}});
+            return;
+        }
+        const proj=projects[currentProjectId];
+        const targetPotsTot=proj.targetVolume/POT_VOLUME;
+        const totalP=totalPots(proj.records);
+        const totalVol=totalP*POT_VOLUME;
+        const remainVol=Math.max(0,proj.targetVolume-totalVol);
+        const remainPots=remainVol/POT_VOLUME;
+        const percent=proj.targetVolume>0?totalVol/proj.targetVolume*100:0;
+        targetVolumeDisplay.innerText=proj.targetVolume; targetPotsDisplay.innerText=targetPotsTot.toFixed(0);
+        totalVolumeDone.innerText=totalVol.toFixed(1); totalPotsDone.innerText=totalP;
+        remainingVolume.innerText=remainVol.toFixed(1); remainingPots.innerText=remainPots.toFixed(0);
+        percentCompleteSpan.innerText=percent.toFixed(1); progressFill.style.width=Math.min(100,percent)+'%';
+        footerTotalPots.innerText=totalP;
+        if(donutChart) donutChart.destroy();
+        let ctx2=document.getElementById('progressDonut').getContext('2d');
+        donutChart=new Chart(ctx2,{type:'doughnut',data:{labels:['完成','剩余'],datasets:[{data:[percent,100-percent],backgroundColor:['#f4bc42','#dee9d6'],borderWidth:0,cutout:'65%'}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}}}});
+        // 材料
+        const targetP=proj.targetVolume/POT_VOLUME;
+        materialGrid.innerHTML='';
+        for(let [k,m] of Object.entries(MATERIALS)){
+            let totalReq=targetP*m.perPot, consumed=totalP*m.perPot, rem=Math.max(0,totalReq-consumed), pct=totalReq>0?consumed/totalReq*100:0;
+            let div=document.createElement('div'); div.className='material-item';
+            div.innerHTML=`<div class="flex-row"><strong>${m.name}</strong><span>kg</span></div><div style="font-size:0.7rem;">总需 ${totalReq.toFixed(0)} &nbsp; 剩余 ${rem.toFixed(0)}</div><div class="material-progress"><div class="material-progress-fill" style="width:${pct}%;"></div></div><div class="inline-hint">已耗 ${consumed.toFixed(0)} (${pct.toFixed(0)}%)</div>`;
+            materialGrid.appendChild(div);
+        }
+        // 表格
+        let sorted=[...proj.records].sort((a,b)=>new Date(b.date)-new Date(a.date));
+        recordsTbody.innerHTML='';
+        for(let rec of sorted){
+            let row=recordsTbody.insertRow();
+            row.insertCell(0).innerText=rec.date;
+            row.insertCell(1).innerText=rec.pots.toFixed(1);
+            row.insertCell(2).innerText=(rec.pots*POT_VOLUME).toFixed(1);
+            row.insertCell(3).innerText=rec.note||'—';
+            let delCell=row.insertCell(4);
+            let delBtn=document.createElement('button'); delBtn.innerText='🗑️'; delBtn.className='delete-btn';
+            delBtn.onclick=()=>requestPassword(()=>{ proj.records=proj.records.filter(r=>r.date!==rec.date); save(); render(); });
+            delCell.appendChild(delBtn);
+        }
+        // 预测
+        let avg=avgDaily(proj.records);
+        avgDailyPotsSpan.innerText=avg.toFixed(1);
+        avgDailyVolumeSpan.innerText=(avg*POT_VOLUME).toFixed(1);
+        let left=remainPots;
+        let daysLeft=avg>0?left/avg:null;
+        estimatedDaysLeftSpan.innerText=(left<=0?'🎉完成':(daysLeft?daysLeft.toFixed(1):'--'));
+        function updateSuggestion(){
+            let targetDays=parseFloat(targetDaysInput.value);
+            if(isNaN(targetDays)||targetDays<=0) targetDays=30;
+            if(left<=0){ suggestionText.innerText='🎉 已完成'; return; }
+            let need=left/targetDays;
+            if(avg>0){
+                if(need<=avg) suggestionText.innerText=`✅ 当前平均 ${avg.toFixed(1)} 锅/天，已超目标 (${need.toFixed(1)}锅/天)。保持即可。`;
+                else suggestionText.innerText=`⚠️ 要在${targetDays}天完成，每日需 ${need.toFixed(1)}锅 (${(need*POT_VOLUME).toFixed(1)}m³)。当前${avg.toFixed(1)}锅/天，需增加${(need-avg).toFixed(1)}锅。`;
+            } else suggestionText.innerText=`📌 建议每日至少 ${need.toFixed(1)} 锅 (${(need*POT_VOLUME).toFixed(1)} m³)。`;
+        }
+        calcSuggestionBtn.onclick=updateSuggestion;
+        if(proj.records.length) updateSuggestion();
+        else suggestionText.innerText='录入产量后显示建议';
+    }
+    function addProduction(){
+        if(!currentProjectId) return;
+        let date=recordDate.value||new Date().toISOString().slice(0,10);
+        let val=parseFloat(inputValue.value);
+        if(isNaN(val)||val<=0){ alert('请输入大于0的产量'); return; }
+        let pots=inputType.value==='pot'?val:val/POT_VOLUME;
+        if(pots<=0){ alert('无效产量'); return; }
+        let note=recordNote.value.trim();
+        let proj=projects[currentProjectId];
+        let idx=proj.records.findIndex(r=>r.date===date);
+        if(idx!==-1){ proj.records[idx].pots+=pots; if(note) proj.records[idx].note=proj.records[idx].note?proj.records[idx].note+'; '+note:note; }
+        else proj.records.push({date,pots,note:note||''});
+        save(); render();
+        inputValue.value='0'; recordNote.value='';
+        if(!recordDate.value) recordDate.value=new Date().toISOString().slice(0,10);
+    }
+    function newProject(){
+        let name=prompt('项目名称:','新项目');
+        if(!name) return;
+        let target=parseFloat(prompt('目标方量(m³):','1200'));
+        if(isNaN(target)||target<=0) target=1200;
+        let id='proj_'+Date.now();
+        projects[id]={name,targetVolume:target,records:[]};
+        currentProjectId=id;
+        save(); refreshSelect(); render();
+    }
+    function editTarget(){
+        if(!currentProjectId) return;
+        let newT=parseFloat(prompt('修改目标方量(m³):',projects[currentProjectId].targetVolume));
+        if(isNaN(newT)||newT<=0) return;
+        projects[currentProjectId].targetVolume=newT;
+        save(); render();
+    }
+    function resetRecords(){
+        if(!currentProjectId) return;
+        if(confirm('清空所有生产记录？')){ projects[currentProjectId].records=[]; save(); render(); }
+    }
+    function exportCSV(){
+        if(!currentProjectId) return;
+        let proj=projects[currentProjectId];
+        if(!proj.records.length){ alert('无记录'); return; }
+        let rows=[['日期','锅数','方量(m³)','备注']];
+        for(let r of proj.records) rows.push([r.date, r.pots.toFixed(1), (r.pots*POT_VOLUME).toFixed(2), r.note||'']);
+        let total=totalPots(proj.records);
+        rows.push(['合计', total.toFixed(1), (total*POT_VOLUME).toFixed(2), '']);
+        let csv=rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+        let blob=new Blob(["\uFEFF"+csv],{type:'text/csv'});
+        let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${proj.name}_产量.csv`; a.click(); URL.revokeObjectURL(blob);
+    }
+    function deleteProject(){
+        if(!currentProjectId) return;
+        if(Object.keys(projects).length<=1){ alert('至少保留一个项目'); return; }
+        if(confirm(`删除项目“${projects[currentProjectId].name}”?`)){
+            delete projects[currentProjectId];
+            currentProjectId=Object.keys(projects)[0]||null;
+            save(); refreshSelect(); render();
+        }
+    }
+    function requestPassword(action){ pendingAction=action; modal.style.display='flex'; adminPasswordInput.value=''; }
+    function checkPassword(){ if(adminPasswordInput.value===ADMIN_PWD){ modal.style.display='none'; if(pendingAction){ pendingAction(); pendingAction=null; } } else alert('密码错误'); }
+    function cancelModal(){ modal.style.display='none'; pendingAction=null; }
+    // 绑定
+    projectSelect.onchange=()=>{ currentProjectId=projectSelect.value||null; save(); refreshSelect(); render(); };
+    newProjectBtn.onclick=newProject;
+    editTargetBtn.onclick=editTarget;
+    addRecordBtn.onclick=addProduction;
+    resetProjectBtn.onclick=()=>requestPassword(resetRecords);
+    exportCsvBtn.onclick=exportCSV;
+    recordDate.value=new Date().toISOString().slice(0,10);
+    // 删除项目按钮
+    let delProjBtn=document.createElement('button'); delProjBtn.innerText='🗑️ 删除项目'; delProjBtn.className='btn-outline'; delProjBtn.style.marginLeft='10px';
+    document.querySelector('#projectNameBadge').parentElement.appendChild(delProjBtn);
+    delProjBtn.onclick=()=>requestPassword(deleteProject);
+    confirmBtn.onclick=checkPassword; cancelBtn.onclick=cancelModal; window.onclick=e=>{if(e.target===modal) cancelModal();};
+    load();
+    // 注册 Service Worker 实现离线缓存 (PWA)
+    if('serviceWorker' in navigator){
+        navigator.serviceWorker.register('/sw.js').catch(()=>console.log('sw not needed'));
+    }
+</script>
+</body>
+</html>
