@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1a56db">
   <title>施工管理系统</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
@@ -185,7 +185,8 @@
 const SUPABASE_URL = 'https://zbczzlefrjvwxbzbjzkw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpiY3p6bGVmcmp2d3hiemJqemt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwNjEyMTYsImV4cCI6MjA2MTYzNzIxNn0.YRNFNDr6fYTCgdD5Q6bJHC7E1_8qmvHtLg3g4bJNk7E';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const { createClient } = supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // 状态
 let loginAttempts = 0;
@@ -202,7 +203,7 @@ function showView(id) {
 
 // 检查是否已登录
 async function checkAuth() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
     showMenu(session.user);
   } else {
@@ -223,7 +224,7 @@ async function doLogin() {
   btn.textContent = '登录中...';
   err.textContent = '';
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: pwd });
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
 
   if (error) {
     loginAttempts++;
@@ -255,7 +256,7 @@ async function doRegister() {
   btn.textContent = '注册中...';
   err.textContent = '';
 
-  const { data, error } = await supabase.auth.signUp({ email, password: pwd });
+  const { data, error } = await supabaseClient.auth.signUp({ email, password: pwd });
 
   if (error) {
     err.textContent = error.message;
@@ -298,7 +299,7 @@ function showMenu(user) {
 
 // 登出
 async function doLogout() {
-  await supabase.auth.signOut();
+  await supabaseClient.auth.signOut();
   loginAttempts = 0;
   showView('loginView');
   document.getElementById('emailInput').value = '';
