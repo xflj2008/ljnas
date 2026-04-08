@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1a56db">
   <title>施工管理系统</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
@@ -15,26 +16,27 @@
       align-items: center;
       justify-content: center;
     }
-    .login-box {
+    .container {
       background: white;
       border-radius: 24px;
       padding: 40px 32px;
       width: 90%;
-      max-width: 360px;
+      max-width: 380px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      text-align: center;
     }
-    .logo { font-size: 56px; margin-bottom: 12px; }
-    .title { font-size: 22px; font-weight: 700; color: #1a2e25; margin-bottom: 8px; }
-    .subtitle { font-size: 13px; color: #6b7280; margin-bottom: 32px; }
-    .input-group { margin-bottom: 16px; }
+    .logo { font-size: 56px; text-align: center; margin-bottom: 12px; }
+    .title { font-size: 22px; font-weight: 700; color: #1a2e25; text-align: center; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #6b7280; text-align: center; margin-bottom: 32px; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .input-group { margin-bottom: 14px; }
+    .input-group label { display: block; font-size: 13px; color: #6b7280; margin-bottom: 6px; }
     input {
       width: 100%;
-      padding: 14px 16px;
+      padding: 12px 14px;
       border: 2px solid #e5e7eb;
-      border-radius: 14px;
-      font-size: 16px;
-      text-align: center;
+      border-radius: 12px;
+      font-size: 15px;
       transition: border-color 0.2s;
     }
     input:focus { outline: none; border-color: #1a56db; }
@@ -55,13 +57,16 @@
     }
     .btn-primary:active { transform: scale(0.98); }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-    .error { color: #dc2626; font-size: 13px; margin-top: 10px; min-height: 18px; }
-    .app-list {
-      margin-top: 24px;
-      display: none;
-      flex-direction: column;
-      gap: 14px;
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+      margin-top: 10px;
     }
+    .error { color: #dc2626; font-size: 13px; margin-top: 8px; min-height: 18px; }
+    .success { color: #059669; font-size: 13px; margin-top: 8px; }
+    .link { color: #1a56db; font-size: 13px; text-align: center; margin-top: 16px; cursor: pointer; text-decoration: underline; }
+    .app-list { display: none; flex-direction: column; gap: 14px; }
+    .app-list.active { display: flex; }
     .app-card {
       display: flex;
       align-items: center;
@@ -78,91 +83,243 @@
     .app-card .icon { font-size: 32px; }
     .app-card .info .name { font-size: 16px; font-weight: 600; color: #1a2e25; }
     .app-card .info .desc { font-size: 12px; color: #9ca3af; margin-top: 2px; }
-    .app-card .arrow { margin-left: auto; color: #9ca3af; font-size: 18px; }
-    .logout {
-      margin-top: 20px;
-      font-size: 13px;
-      color: #9ca3af;
-      cursor: pointer;
-      text-decoration: underline;
-    }
+    .app-card .arrow { margin-left: auto; color: #9ca3af; font-size: 20px; }
+    .user-info { font-size: 13px; color: #6b7280; text-align: center; margin-bottom: 20px; }
+    .logout { font-size: 13px; color: #9ca3af; text-align: center; cursor: pointer; margin-top: 16px; text-decoration: underline; }
+    .loading { text-align: center; color: white; font-size: 16px; }
+    .captcha-box { text-align: center; margin-top: 10px; }
+    .captcha-box span { font-size: 20px; font-weight: 700; letter-spacing: 4px; }
   </style>
 </head>
 <body>
 
-<div class="login-box">
-  <div id="loginView">
+<div class="container" id="app">
+  <!-- Loading -->
+  <div id="loadingView" class="view active">
+    <div class="loading">加载中...</div>
+  </div>
+
+  <!-- 登录 -->
+  <div id="loginView" class="view">
     <div class="logo">🏗️</div>
     <div class="title">施工管理系统</div>
     <div class="subtitle">舍得酒业酒文化博物馆项目</div>
     <div class="input-group">
-      <input type="password" id="pwdInput" placeholder="请输入访问密码" onkeydown="if(event.key==='Enter')doLogin()">
+      <label>邮箱</label>
+      <input type="email" id="emailInput" placeholder="请输入邮箱">
     </div>
-    <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">进入系统</button>
-    <div class="error" id="errorMsg"></div>
+    <div class="input-group">
+      <label>密码</label>
+      <input type="password" id="pwdInput" placeholder="请输入密码" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">登录</button>
+    <div class="error" id="loginError"></div>
+    <div class="link" onclick="showRegister()">没有账号？点此注册</div>
   </div>
 
-  <div id="menuView" style="display:none;">
+  <!-- 注册 -->
+  <div id="registerView" class="view">
     <div class="logo">🏗️</div>
-    <div class="title" style="margin-bottom:24px;">施工管理系统</div>
-    <a class="app-card" href="daily.html">
-      <span class="icon">📋</span>
-      <div class="info">
-        <div class="name">施工日报</div>
-        <div class="desc">夯土墙施工日志生成</div>
-      </div>
-      <span class="arrow">›</span>
-    </a>
-    <a class="app-card" href="production.html">
-      <span class="icon">📊</span>
-      <div class="info">
-        <div class="name">产量统计</div>
-        <div class="desc">施工产量数据记录与分析</div>
-      </div>
-      <span class="arrow">›</span>
-    </a>
+    <div class="title">注册账号</div>
+    <div class="subtitle">设置你的登录邮箱和密码</div>
+    <div class="input-group">
+      <label>邮箱</label>
+      <input type="email" id="regEmail" placeholder="请输入邮箱">
+    </div>
+    <div class="input-group">
+      <label>密码</label>
+      <input type="password" id="regPwd" placeholder="请输入密码（至少6位）">
+    </div>
+    <div class="input-group">
+      <label>确认密码</label>
+      <input type="password" id="regPwd2" placeholder="请再次输入密码" onkeydown="if(event.key==='Enter')doRegister()">
+    </div>
+    <button class="btn btn-primary" id="regBtn" onclick="doRegister()">注册</button>
+    <div class="error" id="regError"></div>
+    <div class="link" onclick="showLogin()">已有账号？点此登录</div>
+  </div>
+
+  <!-- 验证码（错误3次后） -->
+  <div id="captchaView" class="view">
+    <div class="logo">🔐</div>
+    <div class="title">安全验证</div>
+    <div class="subtitle">错误次数过多，请输入验证码</div>
+    <div class="captcha-box">
+      <span id="captchaQuestion"></span>
+    </div>
+    <div class="input-group" style="margin-top:16px;">
+      <input type="text" id="captchaInput" placeholder="请输入答案" onkeydown="if(event.key==='Enter')doCaptcha()">
+    </div>
+    <button class="btn btn-primary" onclick="doCaptcha()">验证</button>
+    <div class="error" id="captchaError"></div>
+    <div class="link" onclick="location.reload()">刷新页面重试</div>
+  </div>
+
+  <!-- 菜单 -->
+  <div id="menuView" class="view">
+    <div class="logo">🏗️</div>
+    <div class="user-info" id="userInfo"></div>
+    <div class="app-list active">
+      <a class="app-card" href="daily.html">
+        <span class="icon">📋</span>
+        <div class="info">
+          <div class="name">施工日报</div>
+          <div class="desc">夯土墙施工日志生成</div>
+        </div>
+        <span class="arrow">›</span>
+      </a>
+      <a class="app-card" href="production.html">
+        <span class="icon">📊</span>
+        <div class="info">
+          <div class="name">产量统计</div>
+          <div class="desc">施工产量数据记录与分析</div>
+        </div>
+        <span class="arrow">›</span>
+      </a>
+    </div>
     <div class="logout" onclick="doLogout()">退出登录</div>
   </div>
 </div>
 
 <script>
-const PASSWORD = 'sheda2026';
+const SUPABASE_URL = 'https://zbczzlefrjvwxbzbjzkw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpiY3p6bGVmcmp2d3hiemJqemt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwNjEyMTYsImV4cCI6MjA2MTYzNzIxNn0.YRNFNDr6fYTCgdD5Q6bJHC7E1_8qmvHtLg3g4bJNk7E';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 状态
+let loginAttempts = 0;
 const MAX_ATTEMPTS = 3;
+let captchaAnswer = 0;
+let pendingLogin = null;
+let pendingRegister = null;
 
-function doLogin() {
-  const pwd = document.getElementById('pwdInput').value;
-  if (!pwd) {
-    document.getElementById('errorMsg').textContent = '请输入密码';
-    return;
-  }
-  if (pwd === PASSWORD) {
-    sessionStorage.setItem('sys_unlocked', '1');
-    showMenu();
-  } else {
-    document.getElementById('errorMsg').textContent = '密码错误';
-    document.getElementById('pwdInput').value = '';
-  }
-}
-
-function showMenu() {
-  document.getElementById('loginView').style.display = 'none';
-  document.getElementById('menuView').style.display = 'flex';
-  document.querySelector('.app-list')?.remove();
-  const box = document.querySelector('.login-box');
-  box.querySelector('#menuView').querySelector('.logout').style.display = 'block';
-}
-
-function doLogout() {
-  sessionStorage.removeItem('sys_unlocked');
-  document.getElementById('loginView').style.display = 'block';
-  document.getElementById('menuView').style.display = 'none';
-  document.getElementById('pwdInput').value = '';
-  document.getElementById('errorMsg').textContent = '';
+// 显示视图
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
 // 检查是否已登录
-if (sessionStorage.getItem('sys_unlocked') === '1') {
-  showMenu();
+async function checkAuth() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    showMenu(session.user);
+  } else {
+    showView('loginView');
+  }
+}
+
+// 登录
+async function doLogin() {
+  const email = document.getElementById('emailInput').value.trim();
+  const pwd = document.getElementById('pwdInput').value;
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('loginError');
+
+  if (!email || !pwd) { err.textContent = '请输入邮箱和密码'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '登录中...';
+  err.textContent = '';
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: pwd });
+
+  if (error) {
+    loginAttempts++;
+    if (loginAttempts >= MAX_ATTEMPTS) {
+      showCaptcha();
+    } else {
+      err.textContent = '邮箱或密码错误，剩余 ' + (MAX_ATTEMPTS - loginAttempts) + ' 次';
+    }
+    btn.disabled = false;
+    btn.textContent = '登录';
+  } else {
+    showMenu(data.user);
+  }
+}
+
+// 注册
+async function doRegister() {
+  const email = document.getElementById('regEmail').value.trim();
+  const pwd = document.getElementById('regPwd').value;
+  const pwd2 = document.getElementById('regPwd2').value;
+  const btn = document.getElementById('regBtn');
+  const err = document.getElementById('regError');
+
+  if (!email || !pwd) { err.textContent = '请输入邮箱和密码'; return; }
+  if (pwd.length < 6) { err.textContent = '密码至少6位'; return; }
+  if (pwd !== pwd2) { err.textContent = '两次密码不一致'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '注册中...';
+  err.textContent = '';
+
+  const { data, error } = await supabase.auth.signUp({ email, password: pwd });
+
+  if (error) {
+    err.textContent = error.message;
+    btn.disabled = false;
+    btn.textContent = '注册';
+  } else {
+    alert('注册成功！请查收验证邮件，点击邮件中的链接完成验证。');
+    showView('loginView');
+    btn.disabled = false;
+    btn.textContent = '注册';
+  }
+}
+
+// 验证码
+function showCaptcha() {
+  const a = Math.floor(Math.random() * 10) + 1;
+  const b = Math.floor(Math.random() * 10) + 1;
+  captchaAnswer = a + b;
+  document.getElementById('captchaQuestion').textContent = a + ' + ' + b + ' = ?';
+  showView('captchaView');
+}
+
+async function doCaptcha() {
+  const ans = document.getElementById('captchaInput').value.trim();
+  if (parseInt(ans) === captchaAnswer) {
+    loginAttempts = 0;
+    alert('验证通过，请重新登录');
+    showView('loginView');
+    document.getElementById('pwdInput').value = '';
+  } else {
+    document.getElementById('captchaError').textContent = '答案错误，请刷新页面重试';
+  }
+}
+
+// 显示菜单
+function showMenu(user) {
+  document.getElementById('userInfo').textContent = user.email;
+  showView('menuView');
+}
+
+// 登出
+async function doLogout() {
+  await supabase.auth.signOut();
+  loginAttempts = 0;
+  showView('loginView');
+  document.getElementById('emailInput').value = '';
+  document.getElementById('pwdInput').value = '';
+}
+
+// 切换视图
+function showRegister() {
+  document.getElementById('regError').textContent = '';
+  showView('registerView');
+}
+function showLogin() {
+  document.getElementById('loginError').textContent = '';
+  showView('loginView');
+}
+
+// 初始化
+if (supabase) {
+  checkAuth();
+} else {
+  showView('loginView');
 }
 </script>
 
