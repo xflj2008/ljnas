@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>舍得日报 - 施工日志</title>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -576,6 +577,16 @@ function fileToBase64(file) {
 }
 
 // 生成日报
+// EmailJS 配置
+const EMAILJS_PUBLIC_KEY = 'SNOQ_oaBBX3n_Xc8l';
+const EMAILJS_SERVICE_ID = 'qqmail';
+const EMAILJS_TEMPLATE_ID = 'template_7630q6v';
+
+// 初始化 EmailJS
+if (typeof emailjs !== 'undefined') {
+  emailjs.init(EMAILJS_PUBLIC_KEY);
+}
+
 async function generateReport() {
   const btn = document.getElementById('genBtn');
   const email = document.getElementById('emailInput').value.trim();
@@ -590,32 +601,37 @@ async function generateReport() {
 
   try {
     const c = getContent();
+    const dateStr = `${currentDate.slice(0,4)}年${parseInt(currentDate.slice(5,7))}月${parseInt(currentDate.slice(8))}日`;
+    const wd = WEEKDAY[new Date(currentDate + 'T00:00:00').getDay()];
 
-    // 照片转 base64
-    const photos = [];
-    for (const f of photoFiles) {
-      const base64 = await fileToBase64(f);
-      photos.push({ name: f.name, data: base64 });
+    // 拼接邮件内容
+    const sections = [
+      { title: '一、基本情况', lines: c.基本情况 || [] },
+      { title: '二、人员设备', lines: c.人员设备 || [] },
+      { title: '三、当日完成', lines: c.当日完成 || [] },
+      { title: '四、次日计划', lines: c.次日计划 || [] },
+      { title: '五、需要协调解决问题', lines: [c.协调问题 || '无'] },
+    ];
+
+    let body = `日期：${dateStr} ${wd} 天气：${weather}\n项目名称：舍得酒业酒文化博物馆建设项目夯土墙施工日报\n\n`;
+    for (const sec of sections) {
+      body += sec.title + '\n';
+      for (const line of sec.lines) body += '  ' + line + '\n';
+      body += '\n';
     }
+    if (photoFiles.length > 0) body += '\n[含' + photoFiles.length + '张现场照片]\n';
 
-    const resp = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        toEmail: email,
-        date: currentDate,
-        weather: weather,
-        content: c,
-        photos: photos,
-      })
-    });
+    // 用 EmailJS 发送
+    const templateParams = {
+      to_email: email,
+      subject: `舍得酒业夯土墙施工日报_${dateStr}`,
+      message: body,
+    };
 
-    const result = await resp.json();
-    if (!resp.ok) throw new Error(result.error || '发送失败');
-
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
     showToast('✅ 已发送到 ' + email, 'success');
   } catch(e) {
-    showToast('❌ ' + e.message, 'error');
+    showToast('❌ 发送失败：' + e.message, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = '📧 发送邮件';
